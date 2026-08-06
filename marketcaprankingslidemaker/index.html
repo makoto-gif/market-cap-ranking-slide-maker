@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>時価総額ランキング推移スライドメーカー</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>時価総額ランキング推移スライドメーカー</h1>
+    <p>日本・世界の時価総額ランキングの推移をスライドにして、PNG / PPTX でダウンロードできます。</p>
+  </header>
+
+  <main class="layout">
+    <aside class="controls">
+      <section class="control-group">
+        <h2>市場</h2>
+        <div class="segmented" id="marketToggle">
+          <button type="button" data-market="japan" class="active">日本</button>
+          <button type="button" data-market="world">世界</button>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>企業の選び方</h2>
+        <div class="segmented" id="modeToggle">
+          <button type="button" data-mode="top" class="active">上位N社</button>
+          <button type="button" data-mode="custom">企業を選ぶ</button>
+        </div>
+        <div class="control-row" id="topNRow">
+          <label for="topN">表示社数</label>
+          <select id="topN">
+            <option value="3">3社</option>
+            <option value="5" selected>5社（基本）</option>
+            <option value="7">7社</option>
+            <option value="10">10社</option>
+          </select>
+        </div>
+        <div class="control-row" id="companyListRow" hidden>
+          <div class="company-list-header">
+            <span>企業を選択（未選択なら上位5社）</span>
+            <button type="button" id="resetCompanies" class="link-button">クリア</button>
+          </div>
+          <div class="company-list" id="companyList"></div>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>期間</h2>
+        <div class="control-row period-row">
+          <select id="startYear"></select>
+          <span>〜</span>
+          <select id="endYear"></select>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="showFuture" checked>
+          未来ゾーン（次の覇者は？）を表示
+        </label>
+      </section>
+
+      <section class="control-group">
+        <h2>タイトル</h2>
+        <input type="text" id="titleInput" placeholder="自動生成されます">
+        <p class="hint">空欄のままなら自動でタイトルを付けます。</p>
+      </section>
+
+      <section class="control-group">
+        <h2>ダウンロード</h2>
+        <div class="download-buttons">
+          <button type="button" id="downloadPng" class="primary">PNG（スライド画像）</button>
+          <button type="button" id="downloadPptx">PPTX（パワーポイント）</button>
+        </div>
+      </section>
+
+      <section class="control-group ranking">
+        <h2 id="rankingHeading">ランキング</h2>
+        <ol id="rankingList"></ol>
+      </section>
+    </aside>
+
+    <section class="preview">
+      <div class="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </div>
+      <p class="disclaimer">※ 数値は CompaniesMarketCap 等をもとにした概算値（10億USD）です。投資判断にはご利用にならないでください。</p>
+    </section>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

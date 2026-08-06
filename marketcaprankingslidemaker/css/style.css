@@ -1,0 +1,187 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "Meiryo", sans-serif;
+  background: #f2f4f8;
+  color: #12263f;
+}
+
+.site-header {
+  background: #12263f;
+  color: #fff;
+  padding: 20px 28px;
+}
+.site-header h1 { font-size: 22px; }
+.site-header p { margin-top: 6px; font-size: 13px; color: #c3cbdb; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  padding: 20px 28px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.controls {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(18, 38, 63, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.control-group h2 {
+  font-size: 13px;
+  color: #5b6472;
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid #d4dae4;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.segmented button {
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  background: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  color: #5b6472;
+}
+.segmented button + button { border-left: 1px solid #d4dae4; }
+.segmented button.active {
+  background: #1f6fd0;
+  color: #fff;
+  font-weight: 700;
+}
+
+.control-row { margin-top: 10px; }
+.control-row label { font-size: 13px; margin-right: 8px; }
+
+select, input[type="text"] {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 7px 10px;
+  border: 1px solid #d4dae4;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+}
+input[type="text"] { width: 100%; }
+
+.period-row { display: flex; align-items: center; gap: 8px; }
+.period-row select { flex: 1; }
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.company-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #5b6472;
+  margin-bottom: 6px;
+}
+.link-button {
+  border: none;
+  background: none;
+  color: #1f6fd0;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.company-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e6e9ef;
+  border-radius: 8px;
+  padding: 6px;
+}
+.company-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.company-item:hover { background: #f2f4f8; }
+
+.color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.hint { font-size: 11px; color: #8a94a6; margin-top: 6px; }
+
+.download-buttons { display: flex; flex-direction: column; gap: 8px; }
+.download-buttons button {
+  padding: 11px 0;
+  border-radius: 8px;
+  border: 1px solid #1f6fd0;
+  background: #fff;
+  color: #1f6fd0;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.download-buttons button.primary {
+  background: #1f6fd0;
+  color: #fff;
+}
+.download-buttons button:hover { opacity: 0.88; }
+.download-buttons button:disabled { opacity: 0.5; cursor: wait; }
+
+.ranking ol { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.ranking li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: #f8f9fc;
+}
+.rank-no {
+  width: 20px;
+  text-align: center;
+  font-weight: 700;
+  color: #5b6472;
+  flex-shrink: 0;
+}
+.rank-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-delta { font-size: 11px; color: #8a94a6; flex-shrink: 0; }
+.rank-value { font-weight: 700; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+.preview { min-width: 0; }
+.canvas-wrap {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(18, 38, 63, 0.08);
+  overflow: hidden;
+}
+.canvas-wrap canvas { display: block; }
+.disclaimer { font-size: 12px; color: #8a94a6; margin-top: 10px; }

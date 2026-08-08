@@ -7,14 +7,21 @@ const JP_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "
 // cfg: {
 //   title, subtitle, footnote,
 //   startYear, endYear, showFuture, futureEndYear,
-//   yAxisLabel, currentLabel,
-//   series: [{ name, color, values: {year: number} }]  // 表示順は任意（内部で終了年の値で整列）
+//   currentT,        // 最新値のX位置（例 2026.58 = 2026年8月）。endYearが最新年でない場合は null
+//   currentLabel,    // 「現在（2026年8月6日）」など。null なら破線ラベルなし
+//   showFutureCopy,  // 「次の覇者は？」などの文言を入れるか
+//   unit: "usd" | "jpy" | "both",
+//   yAxisLabel,
+//   series: [{ name, color, values: {year: number} }]  // 値は10億USD
 // }
 function drawSlide(canvas, cfg) {
   const ctx = canvas.getContext("2d");
   const s = canvas.width / SLIDE_W;
   ctx.save();
   ctx.setTransform(s, 0, 0, s, 0, 0);
+
+  // 軸・ラベルに使う単位変換（jpyモードは兆円、それ以外は10億USDのまま）
+  const toUnit = (v) => (cfg.unit === "jpy" ? usdBToJpyT(v) : v);
 
   // 背景
   ctx.fillStyle = "#ffffff";
@@ -47,32 +54,40 @@ function drawSlide(canvas, cfg) {
   const lastAxisYear = cfg.showFuture ? cfg.futureEndYear : cfg.endYear;
   for (let y = cfg.startYear; y <= lastAxisYear; y++) axisYears.push(y);
 
+  // 各社の描画点列（月次履歴があれば月単位、なければ年次）
+  const drawSeries = cfg.series.map((sr) => ({
+    sr,
+    ...seriesDrawPoints(sr, cfg.startYear, cfg.endYear, cfg.granularity)
+  }));
+  const lineEndX = Math.max(cfg.endYear, ...drawSeries.map((d) => d.endX));
+
   // 未来ゾーン表示なしのときは右側に値ラベル分の余白を確保する
-  const labelGutter = cfg.showFuture ? 0 : 110;
-  const xOf = (year) => {
-    const t = (year - cfg.startYear) / Math.max(1, lastAxisYear - cfg.startYear);
-    return plot.left + t * (plot.right - labelGutter - plot.left);
+  const labelGutter = cfg.showFuture ? 0 : (cfg.unit === "both" ? 230 : 130);
+  const xSpanEnd = cfg.showFuture ? lastAxisYear : lineEndX;
+  const xOf = (t) => {
+    const denom = Math.max(0.5, xSpanEnd - cfg.startYear);
+    return plot.left + ((t - cfg.startYear) / denom) * (plot.right - labelGutter - plot.left);
   };
 
-  // Y スケール（データ最大値からきりの良い目盛りを決める）
+  const xNow = xOf(lineEndX);
+
+  // Y スケール（表示単位でのデータ最大値からきりの良い目盛りを決める）
   let maxVal = 0;
-  for (const sr of cfg.series) {
-    for (let y = cfg.startYear; y <= cfg.endYear; y++) {
-      const v = sr.values[y];
-      if (v != null && v > maxVal) maxVal = v;
+  for (const d of drawSeries) {
+    for (const p of d.pts) {
+      if (toUnit(p.v) > maxVal) maxVal = toUnit(p.v);
     }
   }
   if (maxVal <= 0) maxVal = 100;
-  const steps = [10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000];
+  const steps = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000];
   let step = steps[steps.length - 1];
   for (const st of steps) {
     if (maxVal * 1.08 / st <= 7) { step = st; break; }
   }
   const yMax = Math.ceil((maxVal * 1.08) / step) * step;
-  const yOf = (v) => plot.bottom - (v / yMax) * (plot.bottom - plot.top);
+  const yOf = (v) => plot.bottom - (toUnit(v) / yMax) * (plot.bottom - plot.top);
 
   // 未来ゾーン（薄い背景 + ? + キャッチコピー）
-  const xNow = xOf(cfg.endYear);
   if (cfg.showFuture) {
     const zx = xNow + 14;
     const zw = plot.right - zx;
@@ -84,15 +99,19 @@ function drawSlide(canvas, cfg) {
     ctx.fillStyle = "#c4ccdd";
     ctx.font = `bold 230px ${JP_FONT}`;
     ctx.textAlign = "center";
-    ctx.fillText("?", zcx, plot.top + 250);
-    ctx.fillStyle = "#12263f";
-    ctx.font = `bold 40px ${JP_FONT}`;
-    ctx.fillText(cfg.futureTitle || "次の覇者は？", zcx, plot.top + 430);
-    ctx.fillStyle = "#8a94a6";
-    ctx.font = `24px ${JP_FONT}`;
-    ctx.fillText(cfg.futureNote || "ここから先を読むことが重要", zcx, plot.top + 480);
+    ctx.fillText("?", zcx, plot.top + (cfg.showFutureCopy ? 250 : 300));
+    if (cfg.showFutureCopy) {
+      ctx.fillStyle = "#12263f";
+      ctx.font = `bold 40px ${JP_FONT}`;
+      ctx.fillText("次の覇者は？", zcx, plot.top + 430);
+      ctx.fillStyle = "#8a94a6";
+      ctx.font = `24px ${JP_FONT}`;
+      ctx.fillText("ここから先を読むことが重要", zcx, plot.top + 480);
+    }
+  }
 
-    // 「現在」の破線と▼マーカー
+  // 「現在」の破線と▼マーカー（未来ゾーンの有無に関わらず表示）
+  if (cfg.currentLabel) {
     ctx.strokeStyle = "#5b6472";
     ctx.lineWidth = 2;
     ctx.setLineDash([7, 6]);
@@ -104,7 +123,9 @@ function drawSlide(canvas, cfg) {
     ctx.fillStyle = "#12263f";
     ctx.font = `bold 24px ${JP_FONT}`;
     ctx.textAlign = "center";
-    ctx.fillText(cfg.currentLabel, xNow, plot.top - 48);
+    const labelW = ctx.measureText(cfg.currentLabel).width;
+    const labelX = Math.max(plot.left + labelW / 2, Math.min(xNow, plot.right - labelW / 2));
+    ctx.fillText(cfg.currentLabel, labelX, plot.top - 48);
     ctx.font = `18px ${JP_FONT}`;
     ctx.fillText("▼", xNow, plot.top - 24);
   }
@@ -113,7 +134,7 @@ function drawSlide(canvas, cfg) {
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   for (let v = 0; v <= yMax; v += step) {
-    const y = yOf(v);
+    const y = plot.bottom - (v / yMax) * (plot.bottom - plot.top);
     ctx.strokeStyle = v === 0 ? "#9aa4b2" : "#e6e9ef";
     ctx.lineWidth = v === 0 ? 2 : 1;
     ctx.beginPath();
@@ -148,27 +169,36 @@ function drawSlide(canvas, cfg) {
   ctx.restore();
 
   // 終了年の値で降順に整列（凡例・値ラベルの順序に使用）
-  const ordered = [...cfg.series].sort((a, b) => (b.values[cfg.endYear] ?? -1) - (a.values[cfg.endYear] ?? -1));
+  const ordered = [...drawSeries].sort(
+    (a, b) => (b.sr.values[cfg.endYear] ?? -1) - (a.sr.values[cfg.endYear] ?? -1)
+  );
 
   // 折れ線とマーカー
-  for (const sr of ordered) {
+  for (const d of ordered) {
+    const { sr, pts, mode } = d;
     ctx.strokeStyle = sr.color;
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = mode === "d" ? 2.2 : mode === "m" ? 3 : 3.5;
     ctx.lineJoin = "round";
-    let started = false;
     ctx.beginPath();
-    for (let y = cfg.startYear; y <= cfg.endYear; y++) {
-      const v = sr.values[y];
-      if (v == null) { started = false; continue; }
-      const px = xOf(y), py = yOf(v);
-      if (!started) { ctx.moveTo(px, py); started = true; }
-      else ctx.lineTo(px, py);
+    let started = false;
+    let prevP = null;
+    for (const p of pts) {
+      const px = xOf(p.x), py = yOf(p.v);
+      if (!started || (prevP != null && !segOk(prevP, p))) {
+        ctx.moveTo(px, py);
+        started = true;
+      } else {
+        ctx.lineTo(px, py);
+      }
+      prevP = p;
     }
     ctx.stroke();
-    for (let y = cfg.startYear; y <= cfg.endYear; y++) {
-      const v = sr.values[y];
-      if (v == null) continue;
-      const px = xOf(y), py = yOf(v);
+
+    // マーカーは年区切りの点と先端のみ（年次モードは全点が対象）
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      if (!p.mark && i !== pts.length - 1) continue;
+      const px = xOf(p.x), py = yOf(p.v);
       ctx.fillStyle = sr.color;
       ctx.beginPath();
       ctx.arc(px, py, 6, 0, Math.PI * 2);
@@ -181,7 +211,7 @@ function drawSlide(canvas, cfg) {
   }
 
   // 最新値ラベル（重なりを避けて上下に押し広げる）
-  const labeled = ordered.filter((sr) => sr.values[cfg.endYear] != null);
+  const labeled = ordered.map((d) => d.sr).filter((sr) => sr.values[cfg.endYear] != null);
   const minGap = 30;
   const labels = labeled
     .map((sr) => ({ sr, y: yOf(sr.values[cfg.endYear]) }))
@@ -197,9 +227,10 @@ function drawSlide(canvas, cfg) {
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   for (const lb of labels) {
+    const v = lb.sr.values[cfg.endYear];
     ctx.fillStyle = lb.sr.color;
-    ctx.font = `bold 26px ${JP_FONT}`;
-    ctx.fillText(formatValue(lb.sr.values[cfg.endYear]), xNow + 26, lb.y);
+    ctx.font = `bold ${cfg.unit === "both" ? 24 : 26}px ${JP_FONT}`;
+    ctx.fillText(formatSlideValue(v, cfg.unit), xNow + 26, lb.y);
   }
 
   // 凡例（左上・終了年の値の降順）
@@ -208,7 +239,7 @@ function drawSlide(canvas, cfg) {
   const legendLine = ordered.length > 7 ? 30 : 36;
   const legendFont = ordered.length > 7 ? 22 : 25;
   ctx.textBaseline = "middle";
-  for (const sr of ordered) {
+  for (const { sr } of ordered) {
     ctx.strokeStyle = sr.color;
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -248,7 +279,9 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function formatValue(v) {
-  if (v >= 1000) return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+// スライド上の最新値ラベル（単位モード別、v は10億USD）
+function formatSlideValue(v, unit) {
+  if (unit === "jpy") return `${formatJpyT(v)}兆円`;
+  if (unit === "both") return `${formatValue(v)}（${formatJpyT(v)}兆円）`;
+  return formatValue(v);
 }

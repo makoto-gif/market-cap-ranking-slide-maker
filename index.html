@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>時価総額ランキング推移 | ランキングビュー</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-row">
+      <h1>時価総額ランキング</h1>
+      <span class="data-badge" id="dataBadge">データ読み込み中…</span>
+    </div>
+    <nav class="tabs">
+      <a href="index.html" class="active" aria-current="page">📈 ランキング推移</a>
+      <a href="slide.html">🖼 スライド作成</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <aside class="controls">
+      <section class="control-group">
+        <h2>市場</h2>
+        <div class="segmented" id="marketToggle">
+          <button type="button" data-market="japan" class="active">日本</button>
+          <button type="button" data-market="world">世界</button>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>企業の選び方</h2>
+        <div class="segmented" id="modeToggle">
+          <button type="button" data-mode="top" class="active">上位N社</button>
+          <button type="button" data-mode="custom">企業を選ぶ</button>
+        </div>
+        <div class="control-row" id="topNRow">
+          <label for="topN">表示社数</label>
+          <select id="topN">
+            <option value="3">3社</option>
+            <option value="5" selected>5社（基本）</option>
+            <option value="7">7社</option>
+            <option value="10">10社</option>
+          </select>
+        </div>
+        <div class="control-row" id="companyListRow" hidden>
+          <div class="company-list-header">
+            <span>企業を選択（未選択なら上位5社）</span>
+            <button type="button" id="resetCompanies" class="link-button">クリア</button>
+          </div>
+          <div class="company-list" id="companyList"></div>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>期間</h2>
+        <div class="control-row period-row">
+          <select id="startYear"></select>
+          <span>〜</span>
+          <select id="endYear"></select>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>グラフの細かさ</h2>
+        <div class="segmented" id="granToggle">
+          <button type="button" data-gran="auto" class="active">自動</button>
+          <button type="button" data-gran="daily">日次</button>
+          <button type="button" data-gran="monthly">月次</button>
+          <button type="button" data-gran="yearly">年次</button>
+        </div>
+        <p class="hint">日次は直近約2年分。乱高下を見たいときは日次を選んでください。</p>
+      </section>
+
+      <section class="control-group">
+        <h2>単位</h2>
+        <div class="segmented" id="unitToggle">
+          <button type="button" data-unit="usd" class="active">ドル</button>
+          <button type="button" data-unit="jpy">円</button>
+        </div>
+        <p class="hint">ランキングバーとツールチップでは両方の単位を確認できます。</p>
+      </section>
+    </aside>
+
+    <section class="preview">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>時価総額の推移</h2>
+          <div class="play-controls">
+            <button type="button" id="playBtn" class="play-button">▶ 再生</button>
+            <input type="range" id="timeSlider" min="0" max="1000" value="1000" aria-label="表示時点">
+            <span class="time-label" id="timeLabel"></span>
+          </div>
+        </div>
+        <div class="canvas-block">
+          <canvas id="lineCanvas"></canvas>
+          <div class="chart-tooltip" id="tooltip" hidden></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>ランキング</h2>
+        </div>
+        <div class="canvas-block">
+          <canvas id="barCanvas"></canvas>
+        </div>
+      </div>
+
+      <p class="disclaimer">※ 数値は CompaniesMarketCap／Yahoo Finance をもとにした概算値です。月次データがない期間は年末値の補間表示になります。投資判断にはご利用にならないでください。</p>
+    </section>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/latest.js"></script>
+  <script src="js/view.js"></script>
+</body>
+</html>

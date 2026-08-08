@@ -1,20 +1,24 @@
-// UI 状態と描画・ダウンロードの制御
+// スライド作成ページ: UI 状態と描画・ダウンロードの制御
 const state = {
   market: "japan",       // "japan" | "world"
   mode: "top",           // "top"（上位N社） | "custom"（企業を選ぶ）
   topN: 5,
   selectedIds: { japan: [], world: [] },
-  startYear: 2016,
-  endYear: 2026,
+  startYear: YEARS[0],
+  endYear: LATEST_YEAR,
   showFuture: true,
+  showFutureCopy: true,  // 「次の覇者は？」の文言を入れるか
+  unit: "usd",           // "usd" | "jpy" | "both"
+  granularity: "auto",   // "auto" | "daily" | "monthly" | "yearly"
   customTitle: ""        // 空なら自動タイトル
 };
 
 const els = {};
 document.addEventListener("DOMContentLoaded", () => {
   ["marketToggle", "modeToggle", "topNRow", "topN", "companyListRow", "companyList",
-   "startYear", "endYear", "showFuture", "titleInput", "canvas",
-   "downloadPng", "downloadPptx", "rankingList", "rankingHeading", "resetCompanies"
+   "startYear", "endYear", "showFuture", "showFutureCopy", "unitToggle", "granToggle",
+   "titleInput", "canvas", "downloadPng", "downloadPptx",
+   "rankingList", "rankingHeading", "resetCompanies", "dataBadge"
   ].forEach((id) => { els[id] = document.getElementById(id); });
 
   // 年セレクトを生成
@@ -38,10 +42,23 @@ document.addEventListener("DOMContentLoaded", () => {
     state.mode = btn.dataset.mode;
     render();
   });
+  els.unitToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-unit]");
+    if (!btn) return;
+    state.unit = btn.dataset.unit;
+    render();
+  });
+  els.granToggle.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-gran]");
+    if (!btn) return;
+    state.granularity = btn.dataset.gran;
+    render();
+  });
   els.topN.addEventListener("change", () => { state.topN = Number(els.topN.value); render(); });
   els.startYear.addEventListener("change", onYearChange);
   els.endYear.addEventListener("change", onYearChange);
   els.showFuture.addEventListener("change", () => { state.showFuture = els.showFuture.checked; render(); });
+  els.showFutureCopy.addEventListener("change", () => { state.showFutureCopy = els.showFutureCopy.checked; render(); });
   els.titleInput.addEventListener("input", () => { state.customTitle = els.titleInput.value; render(); });
   els.resetCompanies.addEventListener("click", () => {
     state.selectedIds[state.market] = [];
@@ -56,6 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   buildCompanyList();
   render();
+  // 最新データ読み込み後に再描画
+  latestReady.then(() => { buildCompanyList(); render(); });
 });
 
 function onYearChange() {
@@ -118,20 +137,34 @@ function buildConfig() {
   const autoTitle = isTop
     ? `${market.label} 時価総額トップ${series.length}の推移と、これから`
     : `${market.label} 時価総額 主要${series.length}社の推移と、これから`;
-  const latestYear = YEARS[YEARS.length - 1];
-  const footnote = state.endYear === latestYear
-    ? `注: ${state.startYear}〜${state.endYear - 1}は各年末、${state.endYear}は${state.endYear}年7月時点の概算値。出典: CompaniesMarketCap`
-    : `注: 各年末時点の概算値。出典: CompaniesMarketCap`;
+
+  const isLatestEnd = state.endYear === LATEST_YEAR;
+  const jpyInvolved = state.unit !== "usd";
+  const footnoteParts = [];
+  if (isLatestEnd) {
+    footnoteParts.push(`注: ${state.startYear}〜${state.endYear - 1}は各年末、最新値は${latestDateText()}時点`);
+  } else {
+    footnoteParts.push("注: 各年末時点の値");
+  }
+  if (jpyInvolved) footnoteParts.push(`1USD=${LATEST_META.usdJpy}円で換算`);
+  footnoteParts.push("出典: CompaniesMarketCap／Yahoo Finance（概算値）");
+
+  const yAxisLabel = state.unit === "jpy" ? "時価総額（兆円）" : "時価総額（10億USD）";
+
   return {
     title: state.customTitle.trim() || autoTitle,
     subtitle: state.showFuture ? `${state.startYear}→${state.endYear}→未来` : `${state.startYear}→${state.endYear}`,
-    footnote,
+    footnote: footnoteParts.join("。") + "。",
     startYear: state.startYear,
     endYear: state.endYear,
     showFuture: state.showFuture,
+    showFutureCopy: state.showFutureCopy,
     futureEndYear: state.endYear + 4,
-    yAxisLabel: "時価総額（10億USD）",
-    currentLabel: state.endYear === latestYear ? "現在" : `${state.endYear}年時点`,
+    currentT: isLatestEnd ? currentFractionalYear() : null,
+    granularity: state.granularity,
+    currentLabel: isLatestEnd ? currentPointLabel() : `${state.endYear}年末`,
+    unit: state.unit,
+    yAxisLabel,
     series
   };
 }
@@ -144,11 +177,21 @@ function render() {
   for (const btn of els.modeToggle.querySelectorAll("button")) {
     btn.classList.toggle("active", btn.dataset.mode === state.mode);
   }
+  for (const btn of els.unitToggle.querySelectorAll("button")) {
+    btn.classList.toggle("active", btn.dataset.unit === state.unit);
+  }
+  for (const btn of els.granToggle.querySelectorAll("button")) {
+    btn.classList.toggle("active", btn.dataset.gran === state.granularity);
+  }
   els.topNRow.hidden = state.mode !== "top";
   els.companyListRow.hidden = state.mode !== "custom";
+  els.showFutureCopy.disabled = !state.showFuture;
 
   const cfg = buildConfig();
   els.titleInput.placeholder = cfg.title;
+  els.dataBadge.textContent = LATEST_META.live
+    ? `データ更新: ${latestDateText()}`
+    : `同梱データ: ${latestDateText()}時点`;
 
   // プレビュー canvas（コンテナ幅 × devicePixelRatio で描画）
   const canvas = els.canvas;
@@ -165,7 +208,8 @@ function render() {
 }
 
 function renderRanking(cfg) {
-  els.rankingHeading.textContent = `${MARKET_DATA[state.market].label}ランキング（${state.endYear}年）`;
+  const when = state.endYear === LATEST_YEAR ? latestDateText() : `${state.endYear}年末`;
+  els.rankingHeading.textContent = `${MARKET_DATA[state.market].label}ランキング（${when}）`;
   els.rankingList.innerHTML = "";
   const ranked = [...cfg.series]
     .filter((c) => c.values[state.endYear] != null)
@@ -185,12 +229,13 @@ function renderRanking(cfg) {
       const d = prev - i;
       delta = d > 0 ? `▲${d}` : d < 0 ? `▼${-d}` : "－";
     }
+    const v = c.values[state.endYear];
     li.innerHTML =
       `<span class="rank-no">${i + 1}</span>` +
       `<span class="color-dot" style="background:${c.color}"></span>` +
       `<span class="rank-name">${c.name}</span>` +
       `<span class="rank-delta">${delta}</span>` +
-      `<span class="rank-value">$${formatValue(c.values[state.endYear])}B</span>`;
+      `<span class="rank-value">$${formatValue(v)}B<small> / ${formatJpyT(v)}兆円</small></span>`;
     els.rankingList.appendChild(li);
   });
 }

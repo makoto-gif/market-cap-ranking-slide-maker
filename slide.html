@@ -3,13 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>時価総額ランキング推移スライドメーカー</title>
+  <title>時価総額ランキング推移 | スライド作成</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="site-header">
-    <h1>時価総額ランキング推移スライドメーカー</h1>
-    <p>日本・世界の時価総額ランキングの推移をスライドにして、PNG / PPTX でダウンロードできます。</p>
+    <div class="header-row">
+      <h1>時価総額ランキング</h1>
+      <span class="data-badge" id="dataBadge">データ読み込み中…</span>
+    </div>
+    <nav class="tabs">
+      <a href="index.html">📈 ランキング推移</a>
+      <a href="slide.html" class="active" aria-current="page">🖼 スライド作成</a>
+    </nav>
   </header>
 
   <main class="layout">
@@ -53,16 +59,48 @@
           <span>〜</span>
           <select id="endYear"></select>
         </div>
+      </section>
+
+      <section class="control-group">
+        <h2>グラフの細かさ</h2>
+        <div class="segmented" id="granToggle">
+          <button type="button" data-gran="auto" class="active">自動</button>
+          <button type="button" data-gran="daily">日次</button>
+          <button type="button" data-gran="monthly">月次</button>
+          <button type="button" data-gran="yearly">年次</button>
+        </div>
+        <p class="hint">日次は直近約2年分（それ以前は月次でつながります）。乱高下を見たいときは日次を選んでください。</p>
+      </section>
+
+      <section class="control-group">
+        <h2>単位</h2>
+        <div class="segmented" id="unitToggle">
+          <button type="button" data-unit="usd" class="active">ドル</button>
+          <button type="button" data-unit="jpy">円</button>
+          <button type="button" data-unit="both">両方</button>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h2>未来ゾーン</h2>
         <label class="checkbox-row">
           <input type="checkbox" id="showFuture" checked>
-          未来ゾーン（次の覇者は？）を表示
+          未来ゾーンを表示
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="showFutureCopy" checked>
+          「次の覇者は？」の文言を入れる
         </label>
       </section>
 
       <section class="control-group">
         <h2>タイトル</h2>
         <input type="text" id="titleInput" placeholder="自動生成されます">
-        <p class="hint">空欄のままなら自動でタイトルを付けます。</p>
+      </section>
+
+      <section class="control-group ranking">
+        <h2 id="rankingHeading">ランキング</h2>
+        <ol id="rankingList"></ol>
       </section>
 
       <section class="control-group">
@@ -72,22 +110,18 @@
           <button type="button" id="downloadPptx">PPTX（パワーポイント）</button>
         </div>
       </section>
-
-      <section class="control-group ranking">
-        <h2 id="rankingHeading">ランキング</h2>
-        <ol id="rankingList"></ol>
-      </section>
     </aside>
 
     <section class="preview">
       <div class="canvas-wrap">
         <canvas id="canvas"></canvas>
       </div>
-      <p class="disclaimer">※ 数値は CompaniesMarketCap 等をもとにした概算値（10億USD）です。投資判断にはご利用にならないでください。</p>
+      <p class="disclaimer">※ 数値は CompaniesMarketCap／Yahoo Finance をもとにした概算値（10億USD）です。投資判断にはご利用にならないでください。</p>
     </section>
   </main>
 
   <script src="js/data.js"></script>
+  <script src="js/latest.js"></script>
   <script src="js/chart.js"></script>
   <script src="js/app.js"></script>
 </body>

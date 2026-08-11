@@ -1,37 +1,37 @@
 {
-  "updatedAt": "2026-08-10T21:38:14.709Z",
+  "updatedAt": "2026-08-11T21:42:15.015Z",
   "usdJpy": 159.2,
   "values": {
     "japan": {
-      "toyota": 289.4,
-      "mufg": 259.6,
-      "softbankg": 211.4,
-      "kioxia": 180.4,
+      "toyota": 289.3,
+      "mufg": 259.5,
+      "softbankg": 211.3,
+      "kioxia": 180.3,
       "tokyoelectron": 123.8,
       "sony": 133.3,
-      "ntt": 82,
-      "keyence": 88.1,
+      "ntt": 81.9,
+      "keyence": 88,
       "fastretailing": 87.5,
       "nintendo": 83.5,
       "hitachi": 125.8,
-      "recruit": 99.8,
+      "recruit": 99.7,
       "smfg": 104.6,
       "shinetsu": 61.1,
       "mitsubishicorp": 75
     },
     "world": {
-      "nvidia": 4905.5,
-      "apple": 4397.7,
-      "microsoft": 3734.8,
-      "alphabet": 4571.2,
-      "amazon": 3100.2,
-      "meta": 1507.1,
-      "aramco": 1556.9,
-      "broadcom": 1846.6,
-      "tsmc": 2102.1,
-      "tesla": 1278.9,
-      "berkshire": 1126.2,
-      "elililly": 935.1
+      "nvidia": 4904.3,
+      "apple": 4349.9,
+      "microsoft": 3718.2,
+      "alphabet": 4395.7,
+      "amazon": 3035.4,
+      "meta": 1517.8,
+      "aramco": 1555.8,
+      "broadcom": 1818.9,
+      "tsmc": 2120.1,
+      "tesla": 1286.3,
+      "berkshire": 1098.5,
+      "elililly": 922.2
     }
   }
 }

@@ -1,23 +1,23 @@
 {
-  "updatedAt": "2026-10-11T00:04:46.859Z",
-  "usdJpy": 158.2,
+  "updatedAt": "2026-10-12T00:11:52.486Z",
+  "usdJpy": 158.1,
   "values": {
     "japan": {
-      "toyota": 284.3,
-      "mufg": 257.6,
-      "softbankg": 225.1,
+      "toyota": 284.5,
+      "mufg": 257.7,
+      "softbankg": 225.2,
       "kioxia": 66.2,
       "tokyoelectron": 27.3,
-      "sony": 135.9,
+      "sony": 136,
       "ntt": 89.2,
       "keyence": 84,
       "fastretailing": 80.3,
       "nintendo": 82.8,
-      "hitachi": 127.7,
-      "recruit": 110.2,
+      "hitachi": 127.8,
+      "recruit": 110.3,
       "smfg": 51.7,
       "shinetsu": 59.5,
-      "mitsubishicorp": 71.5
+      "mitsubishicorp": 71.6
     },
     "world": {
       "nvidia": 5170,
@@ -26,7 +26,7 @@
       "alphabet": 4496.2,
       "amazon": 2925.7,
       "meta": 1820.6,
-      "aramco": 1505.3,
+      "aramco": 1502.9,
       "broadcom": 1580.5,
       "tsmc": 2277.1,
       "tesla": 1479.2,

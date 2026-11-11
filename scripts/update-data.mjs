@@ -1,24 +1,55 @@
-// 最新の時価総額を Yahoo Finance から取得して data/latest.json を更新する。
+// 最新の時価総額を Yahoo Finance から取得して data/*.json を更新する。
 // GitHub Actions（.github/workflows/update-data.yml）が毎日実行する。
 //
 // 仕組み:
-//   初回実行時に各銘柄の株価と為替を data/baseline.json に記録し、
-//   基準時点の時価総額（BASE_CAPS_USD_B、10億USD）に株価変動率と為替変動率を
-//   掛けて最新の時価総額を推計する（発行株数の増減は考慮しない概算）。
-//     capUSD = baseCap × (price / basePrice) ÷ (fx / baseFx)
+//   検証済みの時価総額アンカー（CAL_ANCHORS: 特定月末の実際の時価総額、10億USD）と
+//   その月の終値から「株数相当のスケール」を求め、アンカー間は線形補間する。
+//     scale(アンカー月) = アンカー時価総額(現地通貨) ÷ その月の終値
+//     capUSD(t) = 終値(t) × scale(t) ÷ 為替(t)
+//   これにより、自社株買い・増資による発行株数の変化もアンカー間で近似され、
+//   「基準日からの株価変動率」方式で起きていた過去値の歪み
+//   （例: 2021年にソフトバンクGがトヨタを上回って見える誤り）を防ぐ。
+//
+//   アンカーの出典:
+//     - 2026-08: サイト公開時（2026年8月6日）に確認した時価総額（js/data.js と同じ）
+//     - トヨタ/ソフトバンクG 2021-03: stockanalysis.com（東証上場ベース、
+//       JPX時価額順位表とも整合: 2021年3月末 トヨタ28.1兆円 > SBG 19.5兆円）
+//     - トヨタ/ソフトバンクG の各年末: js/data.js の年末値
+//     - 世界企業の2016年末・2021年末: companiesmarketcap 等で広く公表されている値
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
-// 基準時点（2026年8月6日）の時価総額（10億USD）。js/data.js の最新年の値と揃える。
-const BASE_CAPS_USD_B = {
+// 検証済み時価総額アンカー（10億USD）。キーは "YYYY-MM"（その月末時点）。
+const CAL_ANCHORS = {
   japan: {
-    toyota: 292, mufg: 266, softbankg: 216, kioxia: 181, tokyoelectron: 120,
-    sony: 133, ntt: 82, keyence: 89, fastretailing: 89, nintendo: 82,
-    hitachi: 127, recruit: 82, smfg: 108, shinetsu: 60, mitsubishicorp: 76
+    toyota: { "2016-12": 197, "2020-12": 215, "2021-03": 218, "2021-12": 253, "2026-08": 292 },
+    softbankg: { "2016-12": 73, "2020-12": 142, "2021-03": 148, "2021-12": 80, "2026-08": 216 },
+    mufg: { "2026-08": 266 },
+    kioxia: { "2026-08": 181 },
+    tokyoelectron: { "2026-08": 120 },
+    sony: { "2026-08": 133 },
+    ntt: { "2026-08": 82 },
+    keyence: { "2026-08": 89 },
+    fastretailing: { "2026-08": 89 },
+    nintendo: { "2026-08": 82 },
+    hitachi: { "2026-08": 127 },
+    recruit: { "2026-08": 82 },
+    smfg: { "2026-08": 108 },
+    shinetsu: { "2026-08": 60 },
+    mitsubishicorp: { "2026-08": 76 }
   },
   world: {
-    nvidia: 5050, apple: 4470, microsoft: 3690, alphabet: 4530, amazon: 3060,
-    meta: 1500, aramco: 1550, broadcom: 1870, tsmc: 2110, tesla: 1270,
-    berkshire: 1110, elililly: 900
+    nvidia: { "2016-12": 58, "2021-12": 735, "2026-08": 5050 },
+    apple: { "2016-12": 617, "2021-12": 2913, "2026-08": 4470 },
+    microsoft: { "2016-12": 483, "2021-12": 2525, "2026-08": 3690 },
+    alphabet: { "2016-12": 539, "2021-12": 1917, "2026-08": 4530 },
+    amazon: { "2016-12": 356, "2021-12": 1691, "2026-08": 3060 },
+    meta: { "2016-12": 332, "2021-12": 935, "2026-08": 1500 },
+    aramco: { "2019-12": 1879, "2021-12": 1979, "2026-08": 1550 },
+    broadcom: { "2016-12": 70, "2021-12": 274, "2026-08": 1870 },
+    tsmc: { "2016-12": 170, "2021-12": 623, "2026-08": 2110 },
+    tesla: { "2016-12": 35, "2021-12": 1061, "2026-08": 1270 },
+    berkshire: { "2016-12": 401, "2021-12": 669, "2026-08": 1110 },
+    elililly: { "2016-12": 81, "2021-12": 263, "2026-08": 900 }
   }
 };
 
@@ -37,7 +68,7 @@ const TICKERS = {
   }
 };
 
-// 銘柄の取引通貨（為替変動の補正に使う）
+// 銘柄の取引通貨（為替換算に使う）
 function currencyOf(symbol) {
   if (symbol.endsWith(".T")) return "JPY";
   if (symbol.endsWith(".SR")) return "SAR";
@@ -57,23 +88,20 @@ async function fetchChart(symbol, range, interval) {
   return result;
 }
 
-async function fetchPrice(symbol) {
-  const result = await fetchChart(symbol, "5d", "1d");
-  const price = result.meta?.regularMarketPrice;
-  if (price == null || !isFinite(price)) throw new Error(`${symbol}: 株価が取得できない`);
-  return price;
-}
-
 // 月足の終値を { "YYYY-MM": close } の形で返す（現在価格も返す）
+// 注意: Yahoo のタイムスタンプは取引所のローカル時刻基準。UTC のままだと
+// 東証銘柄の月初バーが前月末扱いになり、全履歴が1か月ずれるため、
+// meta.gmtoffset で取引所ローカル時刻に直してから年月を求める。
 async function fetchMonthly(symbol) {
   const result = await fetchChart(symbol, "11y", "1mo");
   const ts = result.timestamp || [];
+  const off = result.meta?.gmtoffset ?? 0;
   const closes = result.indicators?.quote?.[0]?.close || [];
   const months = {};
   for (let i = 0; i < ts.length; i++) {
     const c = closes[i];
     if (c == null || !isFinite(c)) continue;
-    const d = new Date(ts[i] * 1000);
+    const d = new Date((ts[i] + off) * 1000);
     const y = d.getUTCFullYear();
     if (y < HISTORY_START_YEAR) continue;
     const ym = `${y}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -88,12 +116,13 @@ async function fetchMonthly(symbol) {
 async function fetchDaily(symbol) {
   const result = await fetchChart(symbol, "2y", "1d");
   const ts = result.timestamp || [];
+  const off = result.meta?.gmtoffset ?? 0;
   const closes = result.indicators?.quote?.[0]?.close || [];
   const days = {};
   for (let i = 0; i < ts.length; i++) {
     const c = closes[i];
     if (c == null || !isFinite(c)) continue;
-    const d = new Date(ts[i] * 1000);
+    const d = new Date((ts[i] + off) * 1000);
     const ymd = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
     days[ymd] = c;
   }
@@ -107,33 +136,39 @@ function loadJson(path, fallback) {
   return fallback;
 }
 
-const BASELINE_PATH = "data/baseline.json";
 const LATEST_PATH = "data/latest.json";
 const HISTORY_PATH = "data/history.json";
 const HISTORY_DAILY_PATH = "data/history-daily.json";
 
-const baseline = loadJson(BASELINE_PATH, { prices: {}, fx: {} });
 const prevLatest = loadJson(LATEST_PATH, { values: {} });
+const prevHistory = loadJson(HISTORY_PATH, { series: {} });
+const prevHistoryDaily = loadJson(HISTORY_DAILY_PATH, { series: {} });
 
-// 為替（USD→JPY、USD→SAR）: 現在レートと月足の履歴を取得
+// 為替（USD→JPY、USD→SAR）: 現在レートと月足・日足の履歴を取得。
+// 月足の取得失敗は致命的（履歴が計算できない）なので銘柄ごとに前回値で代替する。
 const fxNow = { USD: 1 };
 const fxMonths = { USD: {} };
 const fxDays = { USD: {} };
+const fxOk = { USD: true };
 for (const [key, symbol] of [["JPY", "USDJPY=X"], ["SAR", "SAR=X"]]) {
   try {
     const { months, now } = await fetchMonthly(symbol);
     fxNow[key] = now;
     fxMonths[key] = months;
-    fxDays[key] = await fetchDaily(symbol);
-    if (baseline.fx[key] == null) baseline.fx[key] = now;
+    fxOk[key] = true;
   } catch (e) {
-    console.warn(`為替 ${key} の取得に失敗:`, e.message);
-    fxNow[key] = baseline.fx[key] ?? (key === "JPY" ? 155 : 3.75);
+    console.warn(`為替 ${key}（月足）の取得に失敗:`, e.message);
+    fxNow[key] = key === "JPY" ? 155 : 3.75;
     fxMonths[key] = {};
+    fxOk[key] = false;
+  }
+  try {
+    fxDays[key] = await fetchDaily(symbol);
+  } catch (e) {
+    console.warn(`為替 ${key}（日足）の取得に失敗:`, e.message);
     fxDays[key] = {};
   }
 }
-baseline.fx.USD = 1;
 
 // 指定キー（"YYYY-MM" または "YYYY-MM-DD"）の為替。
 // なければ直近の過去、それもなければ現在値を使う
@@ -152,50 +187,121 @@ function fxAtDay(cur, ymd) {
   return fxLookup(fxDays[cur] || {}, ymd, fxNow[cur]);
 }
 
+// "YYYY-MM" → 連続時間（月インデックス）。月末時点なので +1 とみなす
+function tOfYm(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  return y * 12 + m;
+}
+// "YYYY-MM-DD" → 連続時間（月インデックスに日割りを加算）
+function tOfYmd(ymd) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return y * 12 + (m - 1) + d / 31;
+}
+
+// アンカーから「株数相当スケール」の折れ線を作る。
+// scale = アンカー時価総額(現地通貨, 10億) ÷ アンカー月の終値
+// アンカー月の終値がない場合は前後3か月以内で代替する。
+function buildScaleline(anchors, months, cur) {
+  const pts = [];
+  for (const [ym, capUsdB] of Object.entries(anchors)) {
+    let close = months[ym];
+    if (close == null) {
+      const [y, m] = ym.split("-").map(Number);
+      for (let off = 1; off <= 3 && close == null; off++) {
+        for (const sign of [-1, 1]) {
+          const mm = m - 1 + sign * off;
+          const d = new Date(Date.UTC(y, mm, 1));
+          const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          if (months[k] != null) { close = months[k]; break; }
+        }
+      }
+    }
+    if (close == null || !(close > 0)) continue;
+    const capLocal = capUsdB * fxAt(cur, ym);
+    pts.push({ t: tOfYm(ym), scale: capLocal / close });
+  }
+  pts.sort((a, b) => a.t - b.t);
+  return pts;
+}
+
+// 折れ線 scaleline を時刻 t で評価（範囲外は端の値で一定）
+function scaleAt(pts, t) {
+  if (!pts.length) return null;
+  if (t <= pts[0].t) return pts[0].scale;
+  if (t >= pts[pts.length - 1].t) return pts[pts.length - 1].scale;
+  for (let i = 1; i < pts.length; i++) {
+    if (t <= pts[i].t) {
+      const a = pts[i - 1], b = pts[i];
+      const w = (t - a.t) / (b.t - a.t);
+      return a.scale + (b.scale - a.scale) * w;
+    }
+  }
+  return pts[pts.length - 1].scale;
+}
+
 const values = { japan: {}, world: {} };
 const history = { japan: {}, world: {} };
 const historyDaily = { japan: {}, world: {} };
 let okCount = 0;
 let failCount = 0;
+let dailyCount = 0;
+
+const nowYm = (() => {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+})();
 
 for (const market of ["japan", "world"]) {
   for (const [id, symbol] of Object.entries(TICKERS[market])) {
-    const baseCap = BASE_CAPS_USD_B[market][id];
+    const anchors = CAL_ANCHORS[market][id] || {};
     const cur = currencyOf(symbol);
     try {
       const { months, now } = await fetchMonthly(symbol);
-      if (baseline.prices[symbol] == null) baseline.prices[symbol] = now;
+      const scaleline = buildScaleline(anchors, months, cur);
+      if (!scaleline.length) throw new Error("アンカーを株価に対応付けできない");
 
-      // 最新値: 基準時点からの株価変動率と為替変動率で推計
-      const fxRatio = (fxNow[cur] ?? 1) / (baseline.fx[cur] ?? 1);
-      const cap = baseCap * (now / baseline.prices[symbol]) / fxRatio;
-      values[market][id] = Math.round(cap * 10) / 10;
-
-      // 月次履歴: 各月の終値と為替から同じ方法で推計
+      // 月次履歴: 終値 × scale ÷ 為替
       const hist = {};
       for (const [ym, close] of Object.entries(months)) {
-        const fxR = (fxAt(cur, ym) ?? 1) / (fxNow[cur] ?? 1);
-        const capM = baseCap * (close / now) / fxR;
+        const s = scaleAt(scaleline, tOfYm(ym));
+        const capM = (close * s) / fxAt(cur, ym);
         hist[ym] = Math.round(capM * 10) / 10;
       }
       history[market][id] = hist;
 
+      // 最新値: 現在株価 × 現時点の scale ÷ 現在為替
+      const sNow = scaleAt(scaleline, tOfYm(nowYm));
+      const cap = (now * sNow) / (fxNow[cur] ?? 1);
+      values[market][id] = Math.round(cap * 10) / 10;
+
       // 日次履歴（直近約2年）: 乱高下の確認用
-      const days = await fetchDaily(symbol);
-      const histD = {};
-      for (const [ymd, close] of Object.entries(days)) {
-        const fxR = (fxAtDay(cur, ymd) ?? 1) / (fxNow[cur] ?? 1);
-        const capD = baseCap * (close / now) / fxR;
-        histD[ymd] = Math.round(capD * 10) / 10;
+      try {
+        const days = await fetchDaily(symbol);
+        const histD = {};
+        for (const [ymd, close] of Object.entries(days)) {
+          const s = scaleAt(scaleline, tOfYmd(ymd));
+          const capD = (close * s) / fxAtDay(cur, ymd);
+          histD[ymd] = Math.round(capD * 10) / 10;
+        }
+        historyDaily[market][id] = histD;
+        dailyCount++;
+      } catch (e) {
+        console.warn(`${market}/${id} (${symbol}) 日足の取得に失敗:`, e.message);
+        const prevD = prevHistoryDaily.series?.[market]?.[id];
+        if (prevD) historyDaily[market][id] = prevD;
       }
-      historyDaily[market][id] = histD;
 
       okCount++;
       await new Promise((r) => setTimeout(r, 300)); // レート制限対策
     } catch (e) {
       console.warn(`${market}/${id} (${symbol}) の取得に失敗:`, e.message);
-      // 失敗した銘柄は前回値（なければ基準値）を維持する
-      values[market][id] = prevLatest.values?.[market]?.[id] ?? baseCap;
+      // 失敗した銘柄は前回値を維持する（最新値・履歴とも）
+      const anchorVals = Object.values(anchors);
+      values[market][id] = prevLatest.values?.[market]?.[id] ?? anchorVals[anchorVals.length - 1];
+      const prevH = prevHistory.series?.[market]?.[id];
+      if (prevH) history[market][id] = prevH;
+      const prevD = prevHistoryDaily.series?.[market]?.[id];
+      if (prevD) historyDaily[market][id] = prevD;
       failCount++;
     }
   }
@@ -209,10 +315,11 @@ const latest = {
 };
 
 writeFileSync(LATEST_PATH, JSON.stringify(latest, null, 2) + "\n");
-writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + "\n");
 if (okCount > 0) {
   writeFileSync(HISTORY_PATH, JSON.stringify({ updatedAt, series: history }) + "\n");
-  writeFileSync(HISTORY_DAILY_PATH, JSON.stringify({ updatedAt, series: historyDaily }) + "\n");
+  if (dailyCount > 0 || Object.keys(prevHistoryDaily.series?.japan || {}).length) {
+    writeFileSync(HISTORY_DAILY_PATH, JSON.stringify({ updatedAt, series: historyDaily }) + "\n");
+  }
 }
 console.log(`更新完了: 成功 ${okCount} 件 / 失敗 ${failCount} 件, USDJPY=${latest.usdJpy}`);
 

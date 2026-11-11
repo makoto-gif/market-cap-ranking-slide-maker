@@ -166,10 +166,11 @@ function syncControls() {
 }
 
 // 再生位置の年月表示。末尾（最新時点）は日付まで表示する。
-// 月次データがあるときは実データの月、なければ補間なので「ごろ」を付ける。
+// 細かいデータ（日次/月次）を実際に描画しているときは実データの月、
+// 年次のみの描画では月は補間なので「ごろ」を付ける。
 function timeText(t, t1) {
   if (vstate.endYear === LATEST_YEAR && t >= t1 - 0.001) return `${latestDateText()}時点`;
-  const fine = HAS_MONTHLY || HAS_DAILY;
+  const fine = lastDrawFine;
   const year = Math.floor(t + 1e-6);
   const month = Math.min(12, Math.max(1, Math.round((t - year) * 12) + 1));
   if (!fine && t - year < 1 / 24) return `${year}年`;
@@ -247,6 +248,7 @@ const fmtU = (v) => (vstate.unit === "jpy" ? `${formatJpyT(v)}兆円` : `$${form
 
 // ---- 折れ線チャート ----
 let lineLayout = null; // ホバー用に座標系を保存
+let lastDrawFine = false; // 直近の描画で日次/月次データを使ったか（時点ラベル用）
 
 function draw() {
   drawLine();
@@ -334,8 +336,10 @@ function drawLine() {
 
   // 折れ線（t まで描画）とツールチップ用の候補点
   const candMap = new Map();
+  let anyFine = false;
   for (const c of series) {
     const { pts: allPts, mode } = seriesPoints(c);
+    if (mode !== "y") anyFine = true;
     const pts = allPts.filter((p) => p.x <= t + 1e-6);
     for (const p of allPts) {
       const key = Math.round(p.x * 4000);
@@ -382,6 +386,7 @@ function drawLine() {
   }
 
   const cands = [...candMap.values()].sort((a, b) => a.x - b.x);
+  lastDrawFine = anyFine;
   lineLayout = { plot, t0, t1, xOf, yOf, series, cssW, cssH, cands };
 }
 

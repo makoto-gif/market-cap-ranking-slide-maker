@@ -145,6 +145,13 @@ function segOk(prev, p) {
   return gap <= 0.045;
 }
 
+// 各年の最後の点（＝年の区切り）にマーカーを付ける
+function markYearBoundaries(pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (Math.floor(pts[i].x + 1e-6) < Math.floor(pts[i + 1].x + 1e-6)) pts[i].mark = true;
+  }
+}
+
 // 描画に使う点列を返す。
 //   granularity: "auto" | "daily" | "monthly" | "yearly"
 //   daily   … 日次履歴（直近約2年）＋それ以前は月次で補完
@@ -160,10 +167,12 @@ function seriesDrawPoints(c, startYear, endYear, granularity = "auto") {
   const wantMonthly = granularity !== "yearly" && c._monthly;
 
   // 細かいデータで覆えない古い期間は年次の値で補完する
+  // （最新年はまだ年末値が確定していないので補完に使わない）
   const yearlyBefore = (beforeX) => {
     const pre = [];
     for (let y = startYear; y <= endYear; y++) {
       if (y >= beforeX - 1e-6) break;
+      if (isLatestEnd && y >= LATEST_YEAR) break;
       const v = c.values[y];
       if (v == null) continue;
       pre.push({ x: y, v, src: "y", mark: true, label: `${y}年末` });
@@ -190,11 +199,8 @@ function seriesDrawPoints(c, startYear, endYear, granularity = "auto") {
   if (pts.length >= 2) {
     const endX = curT != null ? curT : endYear + 11 / 12;
     pts = pts.filter((p) => p.x >= startYear - 1e-6 && p.x <= endX + 1e-6);
-    // マーカーは各年12月（月次）／12月末（日次は年末最終営業日）に付ける
-    let lastYearMark = null;
-    for (const p of pts) {
-      if (p.src === "m" && Math.abs((p.x % 1) - 11 / 12) < 1e-3) p.mark = true;
-    }
+    // マーカーは各年の最後の点（月次は12月、日次は年末最終営業日）に付ける
+    markYearBoundaries(pts);
     if (isLatestEnd && c.values[LATEST_YEAR] != null) {
       if (pts.length && curT - pts[pts.length - 1].x < 1 / 200) pts.pop();
       pts.push({ x: curT, v: c.values[LATEST_YEAR], cur: true, mark: true, src: mode, label: latestDateText() });
